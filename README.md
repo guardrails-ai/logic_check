@@ -51,5 +51,5 @@ guard = Guard.use(
 )
 
 guard.validate("Science can prove how the world works.")  # Validator passes
-guard.validate("The sky is blue because my grandmother said it is.")  # Validator fails
+guard.validate("The sky always contains clouds.")  # Validator fails
 ```

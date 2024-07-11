@@ -1,27 +1,56 @@
 # to run these, run 
 # make tests
 
-from guardrails import Guard
 import pytest
-from validator import ValidatorTemplate
+from guardrails.validator_base import PassResult, FailResult
+from validator import LogicCheck
+from pydantic import BaseModel, Field
 
-# We use 'exception' as the validator's fail action,
-#  so we expect failures to always raise an Exception
-# Learn more about corrective actions here:
-#  https://www.guardrailsai.com/docs/concepts/output/#%EF%B8%8F-specifying-corrective-actions
-guard = Guard.from_string(validators=[ValidatorTemplate(arg_1="arg_1", arg_2="arg_2", on_fail="exception")])
+# Create a pydantic model with a field that uses the custom validator
+class ValidatorTestObject(BaseModel):
+    text: str = Field(
+        validators=[
+            LogicCheck(
+                model="gpt-4o",
+                on_fail="exception"
+            )
+        ]
+    )
 
-def test_pass():
-  test_output = "pass"
-  result = guard.parse(test_output)
-  
-  assert result.validation_passed is True
-  assert result.validated_output == test_output
 
-def test_fail():
-  with pytest.raises(Exception) as exc_info:
-    test_output = "fail"
-    guard.parse(test_output)
-  
-  # Assert the exception has your error_message
-  assert str(exc_info.value) == "Validation failed for field with errors: {A descriptive but concise error message about why validation failed}"
+# Test happy path
+@pytest.mark.parametrize(
+    "value",
+    [
+        "The sky is blue.",
+        "Water is wet.",
+    ],
+)
+def test_valid_logic_path(value):
+    validator = LogicCheck(
+        model="gpt-4o",
+        on_fail="exception"
+    )
+    response = validator.validate(value, metadata={})
+    print("Valid logic path response", response)
+
+    assert isinstance(response, PassResult)
+
+# Test invalid logic path
+@pytest.mark.parametrize(
+    "value",
+    [
+        "The sky is blue because my grandmother said it is.",
+        "The earth is flat.",
+    ],
+)
+def test_invalid_logic_path(value):
+    validator = LogicCheck(
+        model="gpt-4o",
+        on_fail="exception"
+    )
+    response = validator.validate(value, metadata={})
+    print("Invalid logic path response", response)
+
+    assert isinstance(response, FailResult)
+    assert response.error_message == "Potential logical fallacies detected in the model output"
