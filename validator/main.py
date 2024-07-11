@@ -8,41 +8,58 @@ from guardrails.validator_base import (
     register_validator,
 )
 
+import openai
 
-@register_validator(name="guardrails/validator_template", data_type="string")
-class ValidatorTemplate(Validator):
-    """Validates that {fill in how you validator interacts with the passed value}.
+
+@register_validator(name="guardrails/logic_check", data_type="string")
+class LogicCheck(Validator):
+    """Validates logical consistency and detects logical fallacies in the model output.
 
     **Key Properties**
 
     | Property                      | Description                       |
     | ----------------------------- | --------------------------------- |
-    | Name for `format` attribute   | `guardrails/validator_template`   |
+    | Name for `format` attribute   | `guardrails/logic_check`          |
     | Supported data types          | `string`                          |
-    | Programmatic fix              | {If you support programmatic fixes, explain it here. Otherwise `None`} |
+    | Programmatic fix              | Attempts to correct logical fallacies in the output |
 
     Args:
-        arg_1 (string): {Description of the argument here}
-        arg_2 (string): {Description of the argument here}
+        model (string): The OpenAI model used for validation.
+        on_fail (Callable): The policy to enact when a validator fails. If `str`, must be one of `reask`, `fix`, `filter`, `refrain`, `noop`, `exception` or `fix_reask`. Otherwise, must be a function that is called when the validator fails.
     """  # noqa
 
-    # If you don't have any init args, you can omit the __init__ method.
     def __init__(
         self,
-        arg_1: str,
-        arg_2: str,
+        model: str = "gpt-4o",
         on_fail: Optional[Callable] = None,
     ):
-        super().__init__(on_fail=on_fail, arg_1=arg_1, arg_2=arg_2)
-        self._arg_1 = arg_1
-        self._arg_2 = arg_2
+        super().__init__(on_fail=on_fail)
+        self.model = model
 
     def validate(self, value: Any, metadata: Dict = {}) -> ValidationResult:
-        """Validates that {fill in how you validator interacts with the passed value}."""
-        # Add your custom validator logic here and return a PassResult or FailResult accordingly.
-        if value != "pass": # FIXME
-            return FailResult(
-                error_message="{A descriptive but concise error message about why validation failed}",
-                fix_value="{The programmtic fix if applicable, otherwise remove this kwarg.}",
+        """Validates logical consistency and detects logical fallacies in the model output."""
+        try:
+            response = openai.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": f"Detect any logical fallacies in the following text:\n\nOriginal: {value}\n\nReturn 'No fallacies found.' if the text is logically sound. If any logical fallacies are found, return only the corrected text.",
+                    }
+                ],
+                max_tokens=1024,
+                temperature=0.0,
             )
-        return PassResult()
+            corrected_text = response.choices[0].message.content.strip()
+
+            if corrected_text == "No fallacies found.":
+                return PassResult()
+            else:
+                return FailResult(
+                    error_message="Potential logical fallacies detected in the model output",
+                    fix_value=f"Original: {value}\nCorrected: {corrected_text}",
+                )
+        except Exception as e:
+            return FailResult(
+                error_message=f"Error during validation: {str(e)}",
+            )
