@@ -1,6 +1,7 @@
 # Overview
 
 | Developed by | Jonathan Bennion |
+| --- | --- |
 | Date of development | Mar 27, 2024 |
 | Validator type | Format |
 | License | Apache 2 |
